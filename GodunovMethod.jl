@@ -1,3 +1,5 @@
+using ProgressMeter
+
 include("RiemannSolver.jl")
 
 function find_Δt(CourantNumber::BigFloat, Δx::BigFloat, a::BigFloat, t::BigFloat)
@@ -171,7 +173,7 @@ end
 
 function MovingGridsDynamicStep(xs::Vector{BigFloat}, γ::BigFloat, t_max::BigFloat, ε::BigFloat,
                      ε₁::BigFloat, ε₂::BigFloat, α::BigFloat, CourantNumber::BigFloat,
-                     IC::Function, BCₗ::Function, BCᵣ::Function)
+                     IC::Function, BCₗ::Function, BCᵣ::Function, birth_nodes::Bool)
     Δt = t_max
     t = BigFloat(0)
     Ws = Vector{PrimVars}()
@@ -189,9 +191,34 @@ function MovingGridsDynamicStep(xs::Vector{BigFloat}, γ::BigFloat, t_max::BigFl
 
     pushfirst!(Ws, BCₗ(BigFloat(0)))
     push!(Ws, BCᵣ(BigFloat(0)))
+
+    progress = ProgressUnknown(
+        dt=1.0,
+        desc="Moving grids simulation ",
+        output=stdout,
+        showspeed=true
+    )
     while t < t_max
         Ws, ψs, xs = MovingGridsOneStep(Ws, ψs, xs, Δx, Δt, γ, ε, ε₁, ε₂, α)
         t += Δt
+
+        ProgressMeter.next!(progress)
+
+        if birth_nodes
+            i = 2
+            while i < length(xs)
+                if xs[i + 1] - xs[i] > 4Δx
+                    insert!(xs, i + 1, (xs[i + 1] + xs[i]) / 2)
+                    insert!(Ws, i + 1, Ws[i])
+                    Ws[i + 1] = W⁺(Ws[i + 1], W⁺(Ws[i + 1], Ws[i + 2], γ, ε)(BigFloat("0.0")), γ, ε)(BigFloat("0.0"))
+                    Ws[i] = W⁺(W⁺(Ws[i - 1], Ws[i], γ, ε)(BigFloat("0.0")), Ws[i], γ, ε)(BigFloat("0.0"))
+                    insert!(ψs, i + 1, (ψs[i + 1] + ψs[i]) / 2)
+                    ψs[i] = (ψs[i - 1] + ψs[i]) / 2
+                else
+                    i += 1
+                end
+            end
+        end
 
         Δt = t_max - t
         for i in 1:(length(xs)-1)
@@ -203,6 +230,9 @@ function MovingGridsDynamicStep(xs::Vector{BigFloat}, γ::BigFloat, t_max::BigFl
         pushfirst!(Ws, BCₗ(t))
         push!(Ws, BCᵣ(t))
     end
+
+    finish!(progress)
+
     pop!(Ws)
     popfirst!(Ws)
     return Ws, ψs, xs
