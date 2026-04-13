@@ -77,7 +77,7 @@ function MovingGridsOneStep(
                             Ws::Vector{PrimVars}, # length n + 1
                             ψs::Vector{BigFloat}, # length n - 1
                             xs::Vector{BigFloat}, # length n
-                            Δy::BigFloat,
+                            Δy::Vector{BigFloat}, # length n - 1
                             Δt::BigFloat,
                             γ::BigFloat,
                             ε::BigFloat,
@@ -89,7 +89,7 @@ function MovingGridsOneStep(
     for i in 2:(length(Ws)-2)
         Wₗ = Ws[i]
         Wᵣ = Ws[i + 1]
-        Qs[i] = findQ(Wₗ, Wᵣ, γ, ε, ε₁, ε₂) + α / Δy * (1 / ψs[i] - 1 / ψs[i - 1])
+        Qs[i] = findQ(Wₗ, Wᵣ, γ, ε, ε₁, ε₂) + α / Δy[i - 1] * (1 / ψs[i] - 1 / ψs[i - 1])
         xs[i] = xs[i] - Qs[i] * Δt
         if xs[i] < xs[i - 1]
             println("   $i: Grid degenerated")
@@ -97,7 +97,7 @@ function MovingGridsOneStep(
     end
     ψs_n = zeros(BigFloat, length(ψs))
     for i in 1:length(ψs)
-        ψs_n[i] = ψs[i] - Δt / Δy * (Qs[i + 1] - Qs[i])
+        ψs_n[i] = ψs[i] - Δt / Δy[i] * (Qs[i + 1] - Qs[i])
     end
     Ws_n = Vector{PrimVars}()
     
@@ -112,19 +112,19 @@ function MovingGridsOneStep(
         ρ₂, u₂, p₂, E₂ = ρupE(W₂, γ)
 
         ρᴷ⁺¹ = (
-            ψs[i - 1] * ρᴷ - Δt / Δy * (
+            ψs[i - 1] * ρᴷ - Δt / Δy[i - 1] * (
                 Qs[i] * ρ₂ + ρ₂ * u₂ - 
                 Qs[i - 1] * ρ₁ - ρ₁ * u₁
             )
         ) / ψs_n[i - 1]
         ρuᴷ⁺¹ = (
-            ψs[i - 1] * ρᴷ * uᴷ - Δt / Δy * (
+            ψs[i - 1] * ρᴷ * uᴷ - Δt / Δy[i - 1] * (
                 Qs[i] * ρ₂ * u₂ + ρ₂ * u₂ ^ 2 + p₂ - 
                 Qs[i - 1] * ρ₁ * u₁ -  ρ₁ * u₁ ^ 2 - p₁
             )
         ) / ψs_n[i - 1]
         Eᴷ⁺¹ = (
-            ψs[i - 1] * Eᴷ - Δt / Δy * (
+            ψs[i - 1] * Eᴷ - Δt / Δy[i - 1] * (
                 Qs[i] * E₂ + (E₂ + p₂) * u₂ - 
                 Qs[i - 1] * E₁ - (E₁ + p₁) * u₁
             )
@@ -182,6 +182,7 @@ function MovingGridsDynamicStep(xs::Vector{BigFloat}, γ::BigFloat, t_max::BigFl
     end
     ψs = ones(BigFloat, length(Ws))
     Δx = xs[2] - xs[1]
+    Δy = xs[2:end] - xs[1:end-1]
 
     for i in 1:(length(xs)-1)
         h = xs[i+1] - xs[i]
@@ -199,7 +200,7 @@ function MovingGridsDynamicStep(xs::Vector{BigFloat}, γ::BigFloat, t_max::BigFl
         showspeed=true
     )
     while t < t_max
-        Ws, ψs, xs = MovingGridsOneStep(Ws, ψs, xs, Δx, Δt, γ, ε, ε₁, ε₂, α)
+        Ws, ψs, xs = MovingGridsOneStep(Ws, ψs, xs, Δy, Δt, γ, ε, ε₁, ε₂, α)
         t += Δt
 
         ProgressMeter.next!(progress)
@@ -214,6 +215,8 @@ function MovingGridsDynamicStep(xs::Vector{BigFloat}, γ::BigFloat, t_max::BigFl
                     Ws[i] = W⁺(W⁺(Ws[i - 1], Ws[i], γ, ε)(BigFloat("0.0")), Ws[i], γ, ε)(BigFloat("0.0"))
                     insert!(ψs, i + 1, (ψs[i + 1] + ψs[i]) / 2)
                     ψs[i] = (ψs[i - 1] + ψs[i]) / 2
+                    Δy[i] /= 2
+                    insert!(Δy, i + 1, Δy[i])
                 else
                     i += 1
                 end
@@ -227,6 +230,8 @@ function MovingGridsDynamicStep(xs::Vector{BigFloat}, γ::BigFloat, t_max::BigFl
             Δt = min(Δt, CourantNumber * h / (a + abs(Ws[i].u)))
         end
 
+        Δt = max(Δt, BigFloat("1e-5"))
+
         pushfirst!(Ws, BCₗ(t))
         push!(Ws, BCᵣ(t))
     end
@@ -235,5 +240,8 @@ function MovingGridsDynamicStep(xs::Vector{BigFloat}, γ::BigFloat, t_max::BigFl
 
     pop!(Ws)
     popfirst!(Ws)
+
+    println(minimum(Δy))
+
     return Ws, ψs, xs
 end
