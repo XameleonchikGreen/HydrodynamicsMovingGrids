@@ -138,7 +138,7 @@ function MovingGridsOneStep(
 
         W₁ = W₂
     end
-    return Ws_n, ψs_n, xs
+    return Ws_n, ψs_n, xs, Qs
 end
 
 function MovingGrids(xs::Vector{BigFloat}, γ::BigFloat, t_max::BigFloat, ε::BigFloat,
@@ -200,7 +200,7 @@ function MovingGridsDynamicStep(xs::Vector{BigFloat}, γ::BigFloat, t_max::BigFl
         showspeed=true
     )
     while t < t_max
-        Ws, ψs, xs = MovingGridsOneStep(Ws, ψs, xs, Δy, Δt, γ, ε, ε₁, ε₂, α)
+        Ws, ψs, xs, Qs = MovingGridsOneStep(Ws, ψs, xs, Δy, Δt, γ, ε, ε₁, ε₂, α)
         t += Δt
 
         ProgressMeter.next!(progress)
@@ -210,11 +210,11 @@ function MovingGridsDynamicStep(xs::Vector{BigFloat}, γ::BigFloat, t_max::BigFl
             while i < length(xs)
                 if xs[i + 1] - xs[i] > 4Δx
                     insert!(xs, i + 1, (xs[i + 1] + xs[i]) / 2)
+                    insert!(Qs, i + 1, (Qs[i + 1] + Qs[i]) / 2)
                     insert!(Ws, i + 1, Ws[i])
-                    Ws[i + 1] = W⁺(Ws[i + 1], W⁺(Ws[i + 1], Ws[i + 2], γ, ε)(BigFloat("0.0")), γ, ε)(BigFloat("0.0"))
-                    Ws[i] = W⁺(W⁺(Ws[i - 1], Ws[i], γ, ε)(BigFloat("0.0")), Ws[i], γ, ε)(BigFloat("0.0"))
-                    insert!(ψs, i + 1, (ψs[i + 1] + ψs[i]) / 2)
-                    ψs[i] = (ψs[i - 1] + ψs[i]) / 2
+                    Ws[i + 1] = W⁺(Ws[i + 1], W⁺(Ws[i + 1], Ws[i + 2], γ, ε)(- Qs[i + 2]), γ, ε)(- (Qs[i + 1] + Qs[i + 2]) / 2)
+                    Ws[i] = W⁺(W⁺(Ws[i - 1], Ws[i], γ, ε)(- Qs[i]), Ws[i], γ, ε)(- (Qs[i] + Qs[i + 1]) / 2)
+                    insert!(ψs, i + 1, ψs[i])
                     Δy[i] /= 2
                     insert!(Δy, i + 1, Δy[i])
                 else
