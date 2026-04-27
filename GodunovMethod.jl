@@ -55,7 +55,7 @@ function GodunovMethod(xs::Vector{BigFloat}, γ::BigFloat, t_max::BigFloat, ε::
     a_max = 0
     for x in xs
         W = IC(x)
-        a = sound_speed(W, γ)
+        a = soundSpeed(W, γ)
         a_max = max(a, a_max)
     end
     Δx = xs[2] - xs[1]
@@ -147,7 +147,7 @@ function MovingGrids(xs::Vector{BigFloat}, γ::BigFloat, t_max::BigFloat, ε::Bi
     a_max = 0
     for x in xs
         W = IC(x)
-        a = sound_speed(W, γ)
+        a = soundSpeed(W, γ)
         a_max = max(a, a_max)
     end
     Δx = xs[2] - xs[1]
@@ -168,7 +168,7 @@ function MovingGrids(xs::Vector{BigFloat}, γ::BigFloat, t_max::BigFloat, ε::Bi
     end
     pop!(Ws)
     popfirst!(Ws)
-    return Ws, xs
+    return Ws, ψs, xs
 end
 
 function MovingGridsDynamicStep(xs::Vector{BigFloat}, γ::BigFloat, t_max::BigFloat, ε::BigFloat,
@@ -186,7 +186,7 @@ function MovingGridsDynamicStep(xs::Vector{BigFloat}, γ::BigFloat, t_max::BigFl
 
     for i in 1:(length(xs)-1)
         h = xs[i+1] - xs[i]
-        a = sound_speed(Ws[i], γ)
+        a = soundSpeed(Ws[i], γ)
         Δt = min(Δt, CourantNumber * h / (a + abs(Ws[i].u)))
     end
 
@@ -195,7 +195,7 @@ function MovingGridsDynamicStep(xs::Vector{BigFloat}, γ::BigFloat, t_max::BigFl
 
     progress = ProgressUnknown(
         dt=1.0,
-        desc="Moving grids simulation ",
+        desc="      Moving grids simulation ",
         output=stdout,
         showspeed=true
     )
@@ -226,7 +226,7 @@ function MovingGridsDynamicStep(xs::Vector{BigFloat}, γ::BigFloat, t_max::BigFl
         Δt = t_max - t
         for i in 1:(length(xs)-1)
             h = xs[i+1] - xs[i]
-            a = sound_speed(Ws[i], γ)
+            a = soundSpeed(Ws[i], γ)
             Δt = min(Δt, CourantNumber * h / (a + abs(Ws[i].u)))
         end
 
@@ -241,7 +241,7 @@ function MovingGridsDynamicStep(xs::Vector{BigFloat}, γ::BigFloat, t_max::BigFl
     pop!(Ws)
     popfirst!(Ws)
 
-    println(minimum(Δy))
+    println("       Minimum step: ", Float64(minimum(Δy)))
 
     return Ws, ψs, xs
 end

@@ -12,7 +12,7 @@ function fₖ(p::BigFloat, Wₖ::PrimVars, γ::BigFloat)
     if p > pₖ
         return (p - pₖ) * gₖ(p, pₖ, ρₖ, γ)
     else
-        aₖ = sound_speed(Wₖ, γ)
+        aₖ = soundSpeed(Wₖ, γ)
         return 2aₖ / (γ - 1) * ((p / pₖ) ^ ((γ - 1) / 2γ) - 1)
     end
 end
@@ -24,7 +24,7 @@ function fꜝₖ(p::BigFloat, Wₖ::PrimVars, γ::BigFloat)
         Bₖ = (γ - 1) / (γ + 1) * pₖ
         return (1 - (p - pₖ) / (2 * (Bₖ + p))) * gₖ(p, pₖ, ρₖ, γ)
     else
-        aₖ = sound_speed(Wₖ, γ)
+        aₖ = soundSpeed(Wₖ, γ)
         return 1 / (ρₖ * aₖ) * (p / pₖ) ^ (-(γ + 1) / 2γ)
     end
 end    
@@ -49,7 +49,7 @@ function Wₗᶠᵃⁿ(Wₗ::PrimVars, γ::BigFloat, S::BigFloat)::PrimVars
     ρₗ = Wₗ.ρ
     uₗ = Wₗ.u
     pₗ = Wₗ.p
-    aₗ = sound_speed(Wₗ, γ)
+    aₗ = soundSpeed(Wₗ, γ)
     ρ = ρₗ * (2 / (γ + 1) + (γ - 1) / (γ + 1) / aₗ * (uₗ - S)) ^ (2 / (γ - 1))
     u = 2 / (γ + 1) * (aₗ + (γ - 1) / 2 * uₗ + S)
     p = pₗ * (2 / (γ + 1) + (γ - 1) / (γ + 1) / aₗ * (uₗ - S)) ^ (2γ / (γ - 1))
@@ -60,7 +60,7 @@ function Wᵣᶠᵃⁿ(Wᵣ::PrimVars, γ::BigFloat, S::BigFloat)::PrimVars
     ρᵣ = Wᵣ.ρ
     uᵣ = Wᵣ.u
     pᵣ = Wᵣ.p
-    aᵣ = sound_speed(Wᵣ, γ)
+    aᵣ = soundSpeed(Wᵣ, γ)
     ρ = ρᵣ * (2 / (γ + 1) - (γ - 1) / (γ + 1) / aᵣ * (uᵣ - S)) ^ (2 / (γ - 1))
     u = 2 / (γ + 1) * (-aᵣ + (γ - 1) / 2 * uᵣ + S)
     p = pᵣ * (2 / (γ + 1) - (γ - 1) / (γ + 1) / aᵣ * (uᵣ - S)) ^ (2γ / (γ - 1))
@@ -76,12 +76,12 @@ function W_non_vacuum(Wₗ::PrimVars,
     ρₗ = Wₗ.ρ
     uₗ = Wₗ.u
     pₗ = Wₗ.p
-    aₗ = sound_speed(Wₗ, γ)
+    aₗ = soundSpeed(Wₗ, γ)
 
     ρᵣ = Wᵣ.ρ
     uᵣ = Wᵣ.u
     pᵣ = Wᵣ.p
-    aᵣ = sound_speed(Wᵣ, γ)
+    aᵣ = soundSpeed(Wᵣ, γ)
 
     u⁺ = W⁺[1]
     p⁺ = W⁺[2]
@@ -141,10 +141,10 @@ function W_vacuum(Wₗ::PrimVars,
                  )::PrimVars
 
     uₗ = Wₗ.u
-    aₗ = sound_speed(Wₗ, γ)
+    aₗ = soundSpeed(Wₗ, γ)
 
     uᵣ = Wᵣ.u
-    aᵣ = sound_speed(Wᵣ, γ)
+    aᵣ = soundSpeed(Wᵣ, γ)
 
     if abs(ρᵣ) < ε # right vacuum
         u₀ = uₗ + 2aₗ / (γ - 1)
@@ -193,12 +193,12 @@ function W⁺(Wₗ::PrimVars,
     ρₗ = Wₗ.ρ
     uₗ = Wₗ.u
     pₗ = Wₗ.p
-    aₗ = sound_speed(Wₗ, γ)
+    aₗ = soundSpeed(Wₗ, γ)
 
     ρᵣ = Wᵣ.ρ
     uᵣ = Wᵣ.u
     pᵣ = Wᵣ.p
-    aᵣ = sound_speed(Wᵣ, γ)
+    aᵣ = soundSpeed(Wᵣ, γ)
 
     if 2aₗ / (γ - 1) + 2aᵣ / (γ - 1) > uᵣ - uₗ # non-vacuum
         pₚᵥ = 1 / 2 * (pₗ + pᵣ) - 1 / 8 * (uᵣ - uₗ) * (ρₗ + ρᵣ) * (aₗ + aᵣ)
@@ -228,12 +228,12 @@ function findQ(
     ρₗ = Wₗ.ρ
     uₗ = Wₗ.u
     pₗ = Wₗ.p
-    aₗ = sound_speed(Wₗ, γ)
+    aₗ = soundSpeed(Wₗ, γ)
 
     ρᵣ = Wᵣ.ρ
     uᵣ = Wᵣ.u
     pᵣ = Wᵣ.p
-    aᵣ = sound_speed(Wᵣ, γ)
+    aᵣ = soundSpeed(Wᵣ, γ)
 
     if 2aₗ / (γ - 1) + 2aᵣ / (γ - 1) > uᵣ - uₗ # non-vacuum
         pₚᵥ = 1 / 2 * (pₗ + pᵣ) - 1 / 8 * (uᵣ - uₗ) * (ρₗ + ρᵣ) * (aₗ + aᵣ)
