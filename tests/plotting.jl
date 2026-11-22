@@ -82,7 +82,7 @@ function plot_solution_fields(cells_ex, cells, exact, numerical, ψ)
     end
     scatter!(p3, x, Float64.(p_n); c="#CC79A7")
 
-    p4 = plot(x_ex, Float64.(E_ex); ylabel=L"E")
+    p4 = plot(x_ex, Float64.(E_ex); ylabel=L"\varepsilon")
     if ψ_max - ψ_min > BigFloat("1e-5")
         E_min = min(minimum(E_ex), minimum(E_n))
         E_max = max(maximum(E_ex), maximum(E_n))
@@ -274,6 +274,50 @@ function simulate_and_plot(
     return nothing
 end
 
+function shu_osher(::Type{T}, N, mesh_velocity_alg) where T <: GridType
+    grid = Grid(T, N, BigFloat("-5"), BigFloat("5"))
+    Wₗ = PrimVars(BigFloat(27 // 7), 4 * sqrt(BigFloat(35)) / 9, BigFloat(31 // 3))
+
+    IC(x::BigFloat) = x ≤ BigFloat("-4") ? Wₗ : 
+        PrimVars(BigFloat("1") + BigFloat("0.2") * sin(5x), BigFloat("0"), BigFloat("1"))
+    
+
+    Wᵣ = IC(BigFloat("5"))
+
+    BCₗ(_, _) = Wₗ
+    BCᵣ(_, _) = Wᵣ
+
+    return make_config(BCₗ, BCᵣ, IC, BigFloat("1.8"), grid, mesh_velocity_alg), grid
+end
+
+function woodward_collela(::Type{T}, N, mesh_velocity_alg) where T <: GridType
+    grid = Grid(T, N, BigFloat("0"), BigFloat("1"))
+
+    ρ = BigFloat(1)
+    u = BigFloat(0)
+    IC(x::BigFloat) = x ≤ BigFloat("0.1") ? PrimVars(ρ, u, BigFloat(1e3)) : 
+                      x ≤ BigFloat("0.9") ? PrimVars(ρ, u, BigFloat("1e-2")) :
+                                            PrimVars(ρ, u, BigFloat(1e2))
+    
+
+    BCₗ(_, Ws::Vector{PrimVars}) = mirror(Ws[2])
+    BCᵣ(_, Ws::Vector{PrimVars}) = mirror(Ws[end-1])
+
+    return make_config(BCₗ, BCᵣ, IC, BigFloat("0.038"), grid, mesh_velocity_alg), grid
+end
+
+const TEST_CASES = Dict{Symbol,Function}(
+    :shu_osher        => shu_osher,
+    :woodward_collela => woodward_collela,
+)
+
+function setup_case(case_id::Symbol, ::Type{T}, N, mesh_velocity_alg) where T <: GridType
+    build = get(TEST_CASES, case_id) do
+        throw(ArgumentError("неизвестный тест $case_id"))
+    end
+    return build(T, N, mesh_velocity_alg)
+end
+
 function simulate_and_plot(
     ::Type{T},
     case_id::Symbol,
@@ -289,124 +333,104 @@ function simulate_and_plot(
 
     setup_plots!()
 
-    if case_id == :shu_osher
+    config, grid = setup_case(case_id, T, N, mesh_velocity_alg)
 
-        grid = Grid(T, N, BigFloat("-5"), BigFloat("5"))
-
-        function BCₗ(t::BigFloat, Ws::Vector{PrimVars})
-            return PrimVars(BigFloat("3.857143"), BigFloat("2.629369"), BigFloat("10.33333"))
-        end
-
-        function BCᵣ(t::BigFloat, Ws::Vector{PrimVars})
-            PrimVars(BigFloat("1") + BigFloat("0.2") * sin(25), BigFloat("0"), BigFloat("1"))
-        end
-        
-        function IC(x::BigFloat)
-            if x ≤ BigFloat("-4")
-                return PrimVars(BigFloat("3.857143"), BigFloat("2.629369"), BigFloat("10.33333"))
-            end
-            return PrimVars(BigFloat("1") + BigFloat("0.2") * sin(5x), BigFloat("0"), BigFloat("1"))
-        end
-
-        config = make_config(BCₗ, BCᵣ, IC, BigFloat("1.8"), grid, mesh_velocity_alg)
-
-        result =
-            if snapshots
-                GasDynamics.simulate(
-                    grid,
-                    config,
-                    method;
-                    birth_nodes=birth_nodes,
-                    snapshot_step=snapshot_step
-                )
-            else
-                GasDynamics.simulate(
-                    grid,
-                    config,
-                    method;
-                    birth_nodes=birth_nodes
-                )
-            end
-
-        γ = config.physics.γ
-        numerical = solution_arrays(result.solution, γ)
-        ψ = 1 ./ result.solution.grid.ψs
-
-        path_to_exact = joinpath(@__DIR__, "..", "..", "CFD_Julia", "09_Euler_1D_Roe")
-
-        df_ρ = CSV.read(
-            joinpath(path_to_exact, "solution_d.txt"),
-            DataFrame;
-            delim=' ',
-            header=false,
-            ignorerepeated=true
-        )
-        rename!(df_ρ, [:x, :rho_0, :rho])
-
-        df_ρu = CSV.read(
-            joinpath(path_to_exact, "solution_v.txt"),
-            DataFrame;
-            delim=' ',
-            header=false,
-            ignorerepeated=true
-        )
-        rename!(df_ρu, [:x, :rho_u_0, :rho_u])
-
-        df_e = CSV.read(
-            joinpath(path_to_exact, "solution_e.txt"),
-            DataFrame;
-            delim=' ',
-            header=false,
-            ignorerepeated=true
-        )
-        rename!(df_e, [:x, :e_0, :e])
-
-        df_ρu[:, :u] = df_ρu[:, :rho_u] ./ df_ρ[:, :rho]
-        df_e[:, :p] = (df_e[:, :e] - df_ρu[:, :rho_u] .* df_ρu[:, :u] ./ 2) .* (γ - 1)
-
-        cells_ex = df_ρ[:, :x]
-        exact = (df_ρ[:, :rho], df_ρu[:, :u], df_e[:, :p], df_e[:, :e])
-
-        cells = cell_centers(grid)
-
-        p = plot_solution_fields(cells_ex, cells, exact, numerical, ψ)
-
-        mname = GasDynamics.method_name(method)
-
-        save_plot_image!(
-            p,
-            mname,
-            N,
-            T,
-            birth_nodes,
-            outdir,
-            save_tiff
-        )
-
-        display(p)
-
-        # Если снапшоты собирались, рисуем их отдельно.
+    result =
         if snapshots
-            snaps = get(result, :snapshots, nothing)
+            GasDynamics.simulate(
+                grid,
+                config,
+                method;
+                birth_nodes=birth_nodes,
+                snapshot_step=snapshot_step
+            )
+        else
+            GasDynamics.simulate(
+                grid,
+                config,
+                method;
+                birth_nodes=birth_nodes
+            )
+        end
 
-            if snaps !== nothing && !isempty(snaps)
-                p_traj = plot_snapshots(snaps, grid.max_id, N)
+    γ = config.physics.γ
+    numerical = solution_arrays(result.solution, γ)
+    ψ = 1 ./ result.solution.grid.ψs
 
-                save_plot_image!(
-                    p_traj,
-                    mname * "_Trajectories",
-                    N,
-                    T,
-                    birth_nodes,
-                    outdir,
-                    save_tiff
-                )
+    path_to_exact = joinpath(@__DIR__, "..", "..", "CFD_Julia", "09_Euler_1D_Roe_$(case_id)")
 
-                display(p_traj)
-            end
+    df_ρ = CSV.read(
+        joinpath(path_to_exact, "solution_d.txt"),
+        DataFrame;
+        delim=' ',
+        header=false,
+        ignorerepeated=true
+    )
+    rename!(df_ρ, [:x, :rho_0, :rho])
+
+    df_ρu = CSV.read(
+        joinpath(path_to_exact, "solution_v.txt"),
+        DataFrame;
+        delim=' ',
+        header=false,
+        ignorerepeated=true
+    )
+    rename!(df_ρu, [:x, :rho_u_0, :rho_u])
+
+    df_e = CSV.read(
+        joinpath(path_to_exact, "solution_e.txt"),
+        DataFrame;
+        delim=' ',
+        header=false,
+        ignorerepeated=true
+    )
+    rename!(df_e, [:x, :e_0, :e])
+
+    df_ρu[:, :u] = df_ρu[:, :rho_u] ./ df_ρ[:, :rho]
+    df_e[:, :e] = (df_e[:, :e] - df_ρu[:, :rho_u] .* df_ρu[:, :u] ./ 2) ./ df_ρ[:, :rho]
+    df_e[:, :p] = df_e[:, :e] .* df_ρ[:, :rho] .* (γ - 1)
+
+    cells_ex = df_ρ[:, :x]
+    exact = (df_ρ[:, :rho], df_ρu[:, :u], df_e[:, :p], df_e[:, :e])
+
+    cells = cell_centers(grid)
+
+    p = plot_solution_fields(cells_ex, cells, exact, numerical, ψ)
+
+    mname = GasDynamics.method_name(method)
+
+    save_plot_image!(
+        p,
+        mname,
+        N,
+        T,
+        birth_nodes,
+        outdir,
+        save_tiff
+    )
+
+    display(p)
+
+    # Если снапшоты собирались, рисуем их отдельно.
+    if snapshots
+        snaps = get(result, :snapshots, nothing)
+
+        if snaps !== nothing && !isempty(snaps)
+            p_traj = plot_snapshots(snaps, grid.max_id, N)
+
+            save_plot_image!(
+                p_traj,
+                mname * "_Trajectories",
+                N,
+                T,
+                birth_nodes,
+                outdir,
+                save_tiff
+            )
+
+            display(p_traj)
         end
     end
 
     return nothing
 end
-

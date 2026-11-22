@@ -47,6 +47,9 @@ export
     min_step,
     insert_node!,
 
+    # Граничные условия
+    mirror,
+
     # Физика
     sound_speed,
     calculate_energy,

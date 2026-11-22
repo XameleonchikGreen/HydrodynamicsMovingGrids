@@ -42,3 +42,5 @@ function apply_bc!(solution::Solution, config::ProblemConfig)
 
     return solution
 end
+
+mirror(W::PrimVars) = PrimVars(W.ρ, -W.u, W.p)
